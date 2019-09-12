@@ -1,12 +1,15 @@
 ---
-layout:     post   				    # 使用的布局（不需要改）
-title:      My First Post 				# 标题 
-subtitle:   Hello World, Hello Blog #副标题
-date:       2017-02-06 				# 时间
-author:     BY 						# 作者
-header-img: img/post-bg-2015.jpg 	#这篇文章标题背景图片
-catalog: true 						# 是否归档
-tags:hadoop								#标签
+layout:     post
+title:     JWT从入门到放弃
+subtitle:    "\"JWT 概念 入门 深入 Code JAVA \""
+date:       2018-08-22
+author:     wangshouchang
+header-img: img/post-bg-universe.jpg
+catalog: true
+tags:
+    - Java
+    - Test
+
 ---
 
 ```
