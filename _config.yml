@@ -64,9 +64,9 @@ gitalk:
   enable: true    #是否开启Gitalk评论
   clientID: 0d93476437f2d8c5a34c                            #生成的clientID
   clientSecret: 0bcc9f153b8b22289848c7ef1a536a48f1136d98    #生成的clientSecret
-  repo: wsccoder.github.io    #仓库名称
-  owner: wsccoder    #github用户名
-  admin: wsccoder
+  repo: luoyunfan.github.io    #仓库名称
+  owner: luoyunfan    #github用户名
+  admin: luoyunfan
   distractionFreeMode: true #是否启用类似FB的阴影遮罩
 
 
@@ -78,7 +78,7 @@ gitalk:
 
 # Google Analytics
 ga_track_id: 'UA-124436101-1'            # Format: UA-xxxxxx-xx
-ga_domain: wsccoder.github.io               # 默认的是 auto, 这里我是自定义了的域名，你如果没有自己的域名，需要改成auto
+ga_domain: auto               # 默认的是 auto, 这里我是自定义了的域名，你如果没有自己的域名，需要改成auto
 
 
 
