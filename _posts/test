@@ -1,0 +1,169 @@
+# mapPartitionsWithIndex(fun)
+
+**查看分区状态**
+
+```
+val rdd  = sc.parallelize(List(1,2,3,4,5,6,7),2)
+
+```
+
+//能看到每个分区里有什么东西
+
+//两个参数Int：分区索引
+
+//Iterator：迭代器，里面放着计算的数据
+
+```
+def func(index:Int,iter:Iterator[(Int)]):Iterator[String]={
+iter.toList.map(x=>"[partID:"+index+",val:"+x+"]").iterator
+}
+//
+val func = (index:Int,iter:Iterator[(Int)]) => {
+iter.toList.map(x=>"[partID:"+index+",val:"+x+"]").iterator
+}
+```
+
+```
+rdd.mapPartitionsWithIndex(func)
+```
+
+![1567517081660](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1567517081660.png)
+
+# aggregate()(func1,func2)
+
+（）初始值
+
+```
+//第一个参数是对每一个partition内部进行聚合，第二个是对多个partition进行聚合
+rdd.aggregate(0)(math.max(_,_),_+_) 
+// 3 + 7 =10
+//第一个分区最大值3，第二个分区最大值7
+```
+
+```
+val rdd = sc.parallelize(List("12","23","345","4567"),2)
+//24  42  
+rdd.aggregate("")( (x,y)=>math.max(x.length,y.length).toString,(x,y)=>x+y)
+```
+
+```
+val rdd = sc.parallelize(List("12","23","345",""),2)
+//10   01
+//“0”.length.toString = 1 
+rdd.aggregate("")( (x,y)=>math.min(x.length,y.length).toString,(x,y)=>x+y)
+```
+
+```
+val rdd = sc.parallelize(List("12","23","","345"),2)
+// 11
+rdd.aggregate("")( (x,y)=>math.min(x.length,y.length).toString,(x,y)=>x+y)
+```
+
+
+
+# aggregateByKey()(,)
+
+```
+val rdd1 = sc.parallelize(List(("a", 2), ("b", 2), ("b", 2), ("c", 2), ("c", 1)))
+//查看分区情况
+val func = (index:Int,iter:Iterator[(String,Int)]) => {
+iter.toList.map(x=>"[partID:"+index+",val:"+x+"]").iterator
+}
+rdd.mapPartitionsWithIndex(func).collect
+
+ Array([partID:0,val:(a,2)], [partID:0,val:(b,2)], [partID:1,val:(b,2)], [partID:1,val:(c,2)], [partID:1,val:(c,1)])
+
+
+rdd1.aggregateByKey(0)(_+_,_+_).collect
+//Array[(String, Int)] = Array((b,4), (a,2), (c,3))
+
+
+
+rdd1.aggregateByKey(0)(math.max(_,_),_+_).collect
+//Array[(String, Int)] = Array((b,4), (a,2), (c,2))
+```
+
+```
+rdd.reduceByKey(_+_).collect
+//reduceByKey 实际是和aggregate一样 只不过参数不一样
+```
+
+# combineByKey( , , )
+
+![1567575989563](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1567575989563.png)
+
+```
+第一个参数：x是每个分区的key的value，且是第一个value
+第二个参数：一个分区内每个k的value相加
+第三个参数：每个分区相加
+```
+
+------
+
+------
+
+------
+
+------
+
+------
+
+------
+
+# repartitions（）
+
+重新分区
+
+# coalesce（3，true）
+
+重新分区，true代表进行shuffle
+
+# collecAsmap
+
+元组可变成map形式
+
+# countBykey
+
+元组变成key-个数的形式
+
+# countByvalve
+
+把元组中的（“”，2）当成一个值，然后统计个数
+
+# filterByRange（“b”，“d”）
+
+会先把rdd进行排序，然后进行过滤（根据key）
+
+# flatMapvalues
+
+Val a=sc.parallelize(List(   (“a”,”1 2”),(“b”,”3 4”)   ))
+ a.flatMapvalues(_.split(“ ”))
+结果：(a,1)(a,2)(b,3)(b,4)
+
+# FoldByKey()(_+_)
+
+key相同的拼接到一起
+
+# foreachPartition（it=》{}）
+
+把每个分区的拿出来进行操作。每个分区得到一个iterator
+
+
+
+# keyBy（_.length）
+
+List（“dog”，“aaaa”）
+
+keyBy(_.length)
+
+以每个单词的长度作为key
+输出（（3，dog）（4，aaaa））
+
+# keys，values
+
+把key和valve取出来
+
+
+
+------
+
