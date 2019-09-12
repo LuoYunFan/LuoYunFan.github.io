@@ -5,9 +5,9 @@ header-img: img/post-bg-universe.jpg
 email: 1187439332@qq.com
 description: "Talk Is Cheap Show Me The Code  "
 keyword: "洛云凡的博客, Java, Go, iPhone, mac pro, book"
-url: "http://wsccoder.github.io"          # your host, for absolute URL
+url: "http://luoyunfan.top"          # your host, for absolute URL
 baseurl: ""      # for example, '/blog' if your blog hosted on 'host/blog'
-github_repo: "https://luoyunfan.top" # you code repository
+github_repo: "http://luoyunfan.top" # you code repository
 
 # Sidebar settings
 sidebar: true                           # whether or not using Sidebar.
