@@ -1,0 +1,777 @@
+---
+layout:     post
+title:     Flume
+subtitle:    flume基础知识+案例
+date:	2019-09-21	
+author:     luoyunfan
+header-img: img/post-bg-universe.jpg
+catalog: true
+tags:
+    - hadoop
+    - flume
+---
+参考借鉴：
+
+用户文档： http://flume.apache.org/FlumeUserGuide.html
+开发文档： http://flume.apache.org/FlumeDeveloperGuide.html
+Flume原理解析： https://www.cnblogs.com/zhangyinhua/p/7803486.html
+
+参考原文地址：<https://blog.csdn.net/qq_29186199/article/details/80829683>
+
+# 1.Flume简介
+
+　Apache flume是一个分布式、可靠、和高可用的海量日志采集、聚合和传输的系统，用于有效地收集、聚合和将大量日志数据从许多不同的源移动到一个集中的数据存储（如文本、HDFS、Hbase等）。
+
+　　其使用不仅仅限于日志数据聚合。因为数据源是可定制的（内置Avro，Thrift
+Syslog，Netcat），Flume可以用于传输大量事件数据，包括但不限于网络流量数据、社交媒体生成的数据、电子邮件消息和几乎所有可能的数据源。
+
+# 2.Flume的核心
+
+　　flume的数据流由事件(Event)贯穿始终。事件是Flume的基本数据单位，它携带日志数据(字节数组形式)并且携带有头信息，这些Event由Agent外部的Source生成，当Source捕获事件后会进行特定的格式化，然后Source会把事件推入(单个或多个)Channel中。你可以把Channel看作是一个缓冲区，它将保存事件直到Sink处理完该事件。Sink负责持久化日志或者把事件推向另一个Source。
+
+- 几个概念
+  - Client：Client生产数据，运行在一个独立的线程。
+  - Event： 一个数据单元，消息头和消息体组成。（Events可以是日志记录、 avro 对象等。）
+  - Flow： Event从源点到达目的点的迁移的抽象。
+  - Agent： 一个独立的Flume进程是其运行的核心，包含三个核心组件Source、 Channel、 Sink。（Agent使用JVM 运行Flume。每台机器运行一个agent，但是可以在一个agent中包含多个sources和sinks。），Flume以agent为最小的独立运行单位。一个agent就是一个JVM。它是一个完整的数据收集工具，通过核心组件， Event 可以从一个地方流向另一个地方，如下图所示。
+    ![img](http://luoyunfan.top/img/flume/1.jpg)
+
+# 3.flume的组件
+
+```
+flume的组件：
+source ： 数据源组件，专门读取相对应的数据，并将数据传到channel中.
+channel : 管道，用于连接source和sink
+sink ： 数据下沉组件，用于将channel中的数据持久化到对应的文件系统中或者流中。
+agent ： flume的运行单元，里面必须包含一个或者多个source、channel、sink，运行在单个jvm中。
+event ： 事件，是数据的描述。
+interceptor ： 拦截器，作用于source阶段，用于过滤数据。
+selectorer ： 选择器，作用于source阶段，默认是replicating，也就是复用功能。mutiplxing
+groupsinks ： sink组，用于将多个sink选择sink。
+```
+
+```
+常见的组件：
+source常用组件：exec、avro source 、 spooling dirctory 、kafka 、netcat 、http、自定义
+channel常用：memory 、 file 、kafka 、 jdbc
+sinks常用 ： logger 、avro 、 hdfs 、hive 、hbase、kafka等
+```
+
+
+
+## 3.1source
+
+- Source： 
+
+  Source是数据的收集端，负责将数据捕获后进行特殊的格式化，将数据封装到事件（event） 里，然后将事件推入Channel中。Flume提供了各种source的实现，包括Avro Source、 Exce Source、 SpoolingDirectory Source、 NetCat Source、 Syslog Source、 Syslog TCP Source、Syslog UDP Source、 HTTP Source、 HDFS Source等等。可以让应用程序同已有的Source直接打交道， 如果内置的Source无法满足需要， Flume还支持自定义Source。分成transtion 和 event 打入到channel之中
+
+![img](http://luoyunfan.top/img/flume/2.png)
+
+source类型：
+
+![img](http://luoyunfan.top/img/flume/3.jpg)
+
+## 3.2channel
+
+​	中转Event的一个临时存储，保存由Source组件传递过来的Event。（Channel连接Source和Sink的组件，可以将它看做一个数据的缓冲区（数据队列），它可以将事件暂存到内存中也可以持久化到本地磁盘上， 直到Sink处理完该事件。介绍两个较为常用的Channel， MemoryChannel和FileChannel（MemoryChannel可以实现高速的吞吐， 但是无法保证数据完整性；MemoryRecoverChannel在官方文档的建议上已经建义使用FileChannel来替换。
+FileChannel保证数据的完整性与一致性。在具体配置不现的FileChannel时，建议FileChannel设置的目录和程序日志文件保存的目录设成不同的磁盘，以便提高效率。）。
+
+### 3.2.1Channel类型
+
+ ![img](http://luoyunfan.top/img/flume/4.png)
+
+### 3.2.2chanel的参数说明
+
+```
+1，useDualCheckpoints（是否需要备份检查点）
+2，compressBackupCheckpoint（是否压缩备份节点）
+3，checkpointDir（检查点目录，默认在${user.home}目录下）
+4，dataDirs（数据节点目录）
+5，capacity（获取配置的容量）
+6，keepAlive（超时时间，就是如果channel中没有数据最长等待时间）
+7，transactionCapacity（事务的最大容量）
+
+注意：capacity的值一定要大于transactionCapacity，不然会报错，看源码：
+```
+
+
+
+## 3.3sink
+
+​	Sink： 从Channel中读取并移除Event，将Event传递到FlowPipeline中的下一个Agent（如果有的话）（Sink从Channel收集数据，运行在一个独立线程。），Sink从Channel中取出事件，然后将数据发到别处，可以向文件系统、数据库、 hadoop存数据， 也可以是其他agent的Source。在日志数据较少时，可以将数据存储在文件系统中，并且设定一定的时间间隔保存数据。
+ 	![img](http://luoyunfan.top/img/flume/5.png)
+
+​	sink类型：
+
+​	![img](http://luoyunfan.top/img/flume/6.png)
+
+## 3.4Flume拦截器、数据流以及可靠性
+
+​	**Flume拦截器** 　
+
+​	当我们需要对数据进行过滤时，除了我们在Source、 Channel和Sink进行代码修改之外，Flume为我们提供了拦截器，拦截器也是chain形式的。拦截器的位置在Source和Channel之间，当我们为Source指定拦截器后，我们在拦截器中会得到event，根据需求我们可以对event进行保留还是抛弃，抛弃的数据不会进入Channel中。
+
+​	**Flume数据流**
+​	Flume 的核心是把数据从数据源收集过来，再送到目的地。为了保证输送一定成功，在送到目的地之前，会先缓存数据，待数据真正到达目的地后，删除自己缓存的数据。
+Flume 传输的数据的基本单位是 Event，如果是文本文件，通常是一行记录，这也是事务的基本单位。 Event 从 Source，流向 Channel，再到 Sink，本身为一个 byte 数组，并可携带 headers 信息。 Event 代表着一个数据流的最小完整单元，从外部数据源来，向外部的目的地去。
+值得注意的是，Flume提供了大量内置的Source、Channel和Sink类型。不同类型的Source,Channel和Sink可以自由组合。组合方式基于用户设置的配置文件，非常灵活。比如：Channel可以把事件暂存在内存里，也可以持久化到本地硬盘上。Sink可以把日志写入HDFS, HBase，甚至是另外一个Source等等。Flume支持用户建立多级流，也就是说，多个agent可以协同工作，并且支持Fan-in、Fan-out、Contextual Routing、Backup Routes，这也正是Flume强大之处。
+
+![img](http://luoyunfan.top/img/flume/7.jpg)
+
+​	**Flume可靠性** 
+
+​	Flume 使用事务性的方式保证传送Event整个过程的可靠性。 Sink 必须在Event 被存入 Channel 后，或者已经被传达到下一站agent里，又或者已经被存入外部数据目的地之后，才能把 Event 从 Channel 中 remove 掉。这样数据流里的 event 无论是在一个 agent 里还是多个 agent 之间流转，都能保证可靠，因为以上的事务保证了 event 会被成功存储起来。比如 Flume支持在本地保存一份文件 channel 作为备份，而memory channel 将event存在内存 queue 里，速度快，但丢失的话无法恢复。
+
+## 3.5一些常用组件的参数说明
+
+```
+https://blog.csdn.net/Suubyy/article/details/80517613
+```
+
+# 4.Flume使用场景
+
+## 4.1多个agent顺序连接
+
+​	可以将多个Agent顺序连接起来，将最初的数据源经过收集，存储到最终的存储系统中。这是最简单的情况，一般情况下，应该控制这种顺序连接的Agent 的数量，因为数据流经的路径变长了，如果不考虑failover的话，出现故障将影响整个Flow上的Agent收集服务。
+
+![img](http://luoyunfan.top/img/flume/8.png)
+
+## 4.2多个Agent的数据汇聚到同一个Agent
+
+​	这种情况应用的场景比较多，比如要收集Web网站的用户行为日志， Web网站为了可用性使用的负载集群模式，每个节点都产生用户行为日志，可以为每 个节点都配置一个Agent来单独收集日志数据，然后多个Agent将数据最终汇聚到一个用来存储数据存储系统，如HDFS上。
+
+![img](http://luoyunfan.top/img/flume/9.png)
+
+## 4.3多级流
+
+ 	什么是多级流？结合在云开发中的应用来举个例子，当syslog， java， nginx、 tomcat等混合在一起的日志流开始流入一个agent后，可以agent中将混杂的日志流分开，然后给每种日志建立一个自己的传输通道。
+
+![img](http://luoyunfan.top/img/flume/10.jpg)
+
+## 4.3load balance功能
+
+​	下图Agent1是一个路由节点，负责将Channel暂存的Event均衡到对应的多个Sink组件上，而每个Sink组件分别连接到一个独立的Agent上 。
+
+![img](http://luoyunfan.top/img/flume/11.jpg)
+
+
+
+# 5.案例
+
+### 案例1(exec -->memory -->logger)
+
+```
+案例1：exec -->memory -->logger
+
+vi ./job/first.job
+#定义source|channel|sink组件
+a1.sources = r1
+a1.sinks = k1
+a1.channels = c1
+
+#配置r1的属性
+a1.sources.r1.type = exec
+a1.sources.r1.command = tail -F /home/hadoop/f_log
+
+#配置sinks的属性
+a1.sinks.k1.type = logger
+
+#配置channel的属性
+a1.channels.c1.type = memory
+a1.channels.c1.capacity = 10000
+a1.channels.c1.transactionCapacity = 10000
+
+#绑定source与sink于channel
+a1.sources.r1.channels = c1
+a1.sinks.k1.channel = c1
+
+测试：
+bin/flume-ng agent -c conf/  -f job/first.job -n a1 -Dflume.root.logger=INFO,console
+```
+
+![1568959533493](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568959533493.png)
+
+![1568959545082](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568959545082.png)
+
+
+
+### 案例2（exec -->memory -->hdfs）
+
+```
+案例2：exec -->memory -->hdfs
+
+vi ./conf/e2h.conf
+#定义source|channel|sink组件
+a1.sources = r1
+a1.sinks = k1
+a1.channels = c1
+
+#配置r1的属性
+a1.sources.r1.type = exec
+a1.sources.r1.command = tail -F /home/hadoop/f_log
+
+#配置sinks的属性
+a1.sinks.k1.type = hdfs
+a1.sinks.k1.hdfs.path = /flume/events/dt=%y-%m-%d
+#设置输出文件的前缀
+#a1.sinks.k1.hdfs.filePrefix = flumeHdfs
+#设置输出文件的后缀
+#a1.sinks.k1.hdfs.fileSuffix = .log
+
+a1.sinks.k1.hdfs.filePrefix = events-
+a1.sinks.k1.hdfs.round = true
+a1.sinks.k1.hdfs.roundValue = 10
+a1.sinks.k1.hdfs.roundUnit = minute
+#解决乱码问题
+a1.sinks.k1.hdfs.fileType=DataStream
+a1.sinks.k1.hdfs.useLocalTimeStamp=true
+
+
+#配置channel的属性
+a1.channels.c1.type = memory
+a1.channels.c1.capacity = 10000
+a1.channels.c1.transactionCapacity = 10000
+
+#绑定source与sink于channel
+a1.sources.r1.channels = c1
+a1.sinks.k1.channel = c1
+
+测试：
+bin/flume-ng agent -c conf/  -f job/e2h.job -n a1 -Dflume.root.logger=INFO,console
+
+
+参数：
+hdfs.rollInterval
+hdfs.rollSize
+hdfs.rollCount
+
+乱码问题：
+在Flume文档中介绍，hdfs.fileType默认为SequenceFile，将其改为DataStream就可以按照采集的文件原样输入到hdfs，加一行a1.sinks.k1.hdfs.fileType=DataStream，就可以解决hdfs文件乱码的问题
+
+
+```
+
+![1568960732707](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568960732707.png)
+
+![1568960746564](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568960746564.png)
+
+![1568960759399](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568960759399.png)
+
+
+
+### 案例3（spooldir + memory + logger） 
+
+```
+案例3、 spooldir + memory + logger
+vi ./conf/spooldir
+a1.sources=r1
+a1.channels=c1
+a1.sinks=s1
+
+#定义source， source使用spooldir， 监控ftp日志
+#a1.sources.src.type=spooldir
+#监控目录
+#a1.sources.src.spoolDir=/hadoop/ftp/idc_bakupload/20180307/22/idc/
+#忽略的文件
+#a1.sources.src.ignorePattern = ^(.)*\\.AVL\\.(.)*$
+#处理后的文件，添加后缀
+#a1.sources.src.fileSuffix = .bak
+ 
+
+a1.sources.r1.type=spoolDir
+a1.sources.r1.spoolDir=/home/hadoop/flumedata/spool1
+a1.sources.r1.fileHeader=true
+a1.sources.r1.fileHeaderKey=file
+
+a1.channels.c1.type=memory
+a1.channels.c1.capacity=1000
+a1.channels.c1.transactionCapacity=100
+a1.channels.c1.keep-alive=3
+a1.channels.c1.byteCapacityBufferPercentage = 20
+a1.channels.c1.byteCapacity = 800000
+
+
+a1.sinks.s1.type = logger
+
+a1.sources.r1.channels=c1
+a1.sinks.s1.channel=c1
+
+启动agent:
+bin/flume-ng agent -c ./conf/ -f ./job/spooldir -n a1 -Dflume.root.logger=INFO,console
+测试：
+```
+
+把2.txt转移到被监控的目录下面
+
+```
+ cp 2.txt flumedata/spool1/
+```
+
+![1568963115179](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568963115179.png)
+
+监控到文件变化
+
+![1568963201738](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568963201738.png)
+
+```
+注：
+以下不会触发事件。
+修改被监听目录下的文件内容、移走目录下的文件、删除目录下的文件、向目标目录移入文件夹
+```
+
+
+
+### 案例4（syslogtcp + memory + logger）
+
+```
+案例4、 syslogtcp + memory + logger
+vi ./conf/syslogtcp
+a1.sources=r1
+a1.channels=c1
+a1.sinks=s1
+
+a1.sources.r1.type=syslogtcp
+a1.sources.r1.port=6666
+a1.sources.r1.host=hadoop01
+
+a1.channels.c1.type=memory
+a1.channels.c1.capacity=1000
+a1.channels.c1.transactionCapacity=100
+a1.channels.c1.keep-alive=3
+a1.channels.c1.byteCapacityBufferPercentage = 20
+a1.channels.c1.byteCapacity = 800000
+
+a1.sinks.s1.type = logger
+
+a1.sources.r1.channels=c1
+a1.sinks.s1.channel=c1
+
+启动agent:
+bin/flume-ng agent -c ./conf/ -f ./job/syslogtcp -n a1 -Dflume.root.logger=INFO,console
+测试：
+echo "hello qianfeng" | nc mini1 6666
+```
+
+![1568965557794](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568965557794.png)
+
+![1568965585437](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568965585437.png)
+
+### 案例5(http + memory + logger)
+
+```
+案例5、 http + memory + logger
+vi ./conf/http
+a1.sources=r1
+a1.channels=c1
+a1.sinks=s1
+
+a1.sources.r1.type=org.apache.flume.source.http.HTTPSource
+a1.sources.r1.port=6667
+a1.sources.r1.bind=mini1
+
+a1.channels.c1.type=memory
+a1.channels.c1.capacity=1000
+a1.channels.c1.transactionCapacity=100
+a1.channels.c1.keep-alive=3
+a1.channels.c1.byteCapacityBufferPercentage = 20
+a1.channels.c1.byteCapacity = 800000
+
+a1.sinks.s1.type = logger
+
+a1.sources.r1.channels=c1
+a1.sinks.s1.channel=c1
+
+启动agent:
+bin/flume-ng agent -c ./conf/ -f ./job/http -n a1 -Dflume.root.logger=INFO,console
+测试：
+curl -X POST -d '[{"headers":{"time":"2017-06-13","aaa":"aaa!!!"},"body":"this is http"}]' http://mini1:6667
+```
+
+![1568968059922](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568968059922.png)
+
+![1568968039464](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568968039464.png)
+
+
+
+### 案例6（exec + file + hdfs）
+
+```
+vi ./conf/file
+a1.sources=r1
+a1.channels=c1
+a1.sinks=s1
+
+a1.sources.r1.type=exec
+a1.sources.r1.command= tail -f /home/hadoop/f_log
+
+a1.channels.c1.type=file
+a1.channels.c1.checkpointDir=/home/flumedata/checkpoint
+a1.channels.c1.dataDirs=/home/flumedata/data
+
+a1.sinks.s1.type = hdfs
+a1.sinks.s1.hdfs.path = /flume/events1/%y-%m-%d/%H%M/%S
+a1.sinks.s1.hdfs.filePrefix = qianfeng-
+a1.sinks.s1.hdfs.fileSuffix=.log
+a1.sinks.s1.hdfs.inUseSuffix=.tmp
+a1.sinks.s1.hdfs.rollInterval=2
+a1.sinks.s1.hdfs.rollSize=1024
+a1.sinks.s1.hdfs.fileType=DataStream
+a1.sinks.s1.hdfs.writeFormat=Text
+a1.sinks.s1.hdfs.round = true
+a1.sinks.s1.hdfs.roundValue = 1
+a1.sinks.s1.hdfs.roundUnit = second
+a1.sinks.s1.hdfs.useLocalTimeStamp=true
+
+
+a1.sources.r1.channels=c1
+a1.sinks.s1.channel=c1
+
+
+```
+
+![1568972369160](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568972369160.png)
+
+![1568972429960](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568972429960.png)
+
+**查看channels的落地文件信息，发现全是乱码**
+
+![1568972874751](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568972874751.png)
+
+## 拦截器
+
+### 案例1
+
+```
+1、Timestamp Interceptor(时间戳拦截器)
+
+flume中一个最经常使用的拦截器 ，该拦截器的作用是将时间戳插入到flume的事件报头中。如果不使用任何拦截器，flume接受到的只有message。时间戳拦截器的配置。 参数 默认值 描述 type   类型名称timestamp，也可以使用类名的全路径 preserveExisting false 如果设置为true，若事件中报头已经存在，不会替换时间戳报头的值
+
+ 2、Host Interceptor(主机拦截器)
+
+主机拦截器插入服务器的ip地址或者主机名，agent将这些内容插入到事件的报头中。时间报头中的key使用hostHeader配置，默认是host。主机拦截器的配置参数 默认值 描述 type   类型名称host hostHeader host 事件投的key useIP true 如果设置为false，host键插入主机名 preserveExisting false 如果设置为true，若事件中报头已经存在，不会替换host报头的值
+
+
+3、静态拦截器(Static Interceptor)
+
+静态拦截器的作用是将k/v插入到事件的报头中。配置如下参数 默认值 描述 type   类型名称static key key 事件头的key value value key对应的value值 preserveExisting true 如果设置为true，若事件中报头已经存在该key，不会替换value的值source连接到静态拦截器的配置：
+
+
+a1.sources=r1
+a1.channels=c1
+a1.sinks=s1
+
+a1.sources.r1.type=exec
+a1.sources.r1.command= tail -f /home/hadoop/f_log
+a1.sources.r1.interceptors = i1 i2 i3
+a1.sources.r1.interceptors.i1.type = timestamp
+a1.sources.r1.interceptors.i1.preserveExisting=true
+a1.sources.r1.interceptors.i2.type = host
+a1.sources.r1.interceptors.i2.hostHeader = hostname
+a1.sources.r1.interceptors.i2.preserveExisting=true
+a1.sources.r1.interceptors.i3.type = static
+a1.sources.r1.interceptors.i3.key = city
+a1.sources.r1.interceptors.i3.value = NEW_YORK
+
+a1.channels.c1.type=memory
+a1.channels.c1.capacity=1000
+a1.channels.c1.transactionCapacity=100
+a1.channels.c1.keep-alive=3
+a1.channels.c1.byteCapacityBufferPercentage = 20
+a1.channels.c1.byteCapacity = 800000
+
+a1.sinks.s1.type = hdfs
+a1.sinks.s1.hdfs.path = /flume/events2/%y-%m-%d/%H%M/%S
+a1.sinks.s1.hdfs.filePrefix = %{hostname}-
+a1.sinks.s1.hdfs.fileSuffix=.log
+a1.sinks.s1.hdfs.inUseSuffix=.tmp
+a1.sinks.s1.hdfs.rollInterval=2
+a1.sinks.s1.hdfs.rollSize=1024
+a1.sinks.s1.hdfs.fileType=DataStream
+a1.sinks.s1.hdfs.writeFormat=Text
+a1.sinks.s1.hdfs.round = true
+a1.sinks.s1.hdfs.roundValue = 1
+a1.sinks.s1.hdfs.roundUnit = second
+a1.sinks.s1.hdfs.useLocalTimeStamp=false
+
+a1.sources.r1.channels=c1
+a1.sinks.s1.channel=c1
+
+
+bin/flume-ng agent -c conf -f job/ite1.jps -n a1 -Dflume.root.logger=INFO,console
+```
+
+![1568979451027](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568979451027.png)
+
+### 案例2、正则拦截器
+
+```
+vi rex.job
+a1.sources=r1
+a1.channels=c1
+a1.sinks=s1
+
+a1.sources.r1.type=exec
+a1.sources.r1.command= tail -f /home/hadoop/f_log
+a1.sources.r1.interceptors = i1
+a1.sources.r1.interceptors.i1.type = regex_filter
+a1.sources.r1.interceptors.i1.regex=^[0-9].*$
+a1.sources.r1.interceptors.i1.excludeEvents=false
+
+
+a1.channels.c1.type=memory
+a1.channels.c1.capacity=1000
+a1.channels.c1.transactionCapacity=100
+a1.channels.c1.keep-alive=3
+a1.channels.c1.byteCapacityBufferPercentage = 20
+a1.channels.c1.byteCapacity = 800000
+
+a1.sinks.s1.type = logger
+
+a1.sources.r1.channels=c1
+a1.sinks.s1.channel=c1
+
+启动agent:
+bin/flume-ng agent -c ./conf/ -f ./job/rex.job -n a1 -Dflume.root.logger=INFO,console
+```
+
+**追加字符串，发现没反应**
+
+![1568979682792](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568979682792.png)
+
+![1568979694413](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568979694413.png)
+
+**追加符合^[0-9].*$格式的字符串，可以读到**
+
+![1568980979520](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568980979520.png)
+
+![1568980963561](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568980963561.png)
+
+### 案例3、复制选择器
+
+```
+vi  rep.job
+a1.sources=r1
+a1.channels=c1 c2
+a1.sinks=s1 s2
+
+a1.sources.r1.type=exec
+a1.sources.r1.command= tail -f /home/hadoop/f_log
+a1.sources.r1.selector.type = replicating
+a1.sources.r1.selector.optional = c2
+
+a1.channels.c1.type=memory
+a1.channels.c1.capacity=1000
+a1.channels.c1.transactionCapacity=100
+a1.channels.c1.keep-alive=3
+a1.channels.c1.byteCapacityBufferPercentage = 20
+a1.channels.c1.byteCapacity = 800000
+
+a1.channels.c2.type=memory
+a1.channels.c2.capacity=1000
+a1.channels.c2.transactionCapacity=100
+a1.channels.c2.keep-alive=3
+a1.channels.c2.byteCapacityBufferPercentage = 20
+a1.channels.c2.byteCapacity = 800000
+
+a1.sinks.s1.type = logger
+
+a1.sinks.s2.type = hdfs
+a1.sinks.s2.hdfs.path = /flume/events3/%y-%m-%d/%H%M/%S
+a1.sinks.s2.hdfs.filePrefix = event-
+a1.sinks.s2.hdfs.fileSuffix=.log
+a1.sinks.s2.hdfs.inUseSuffix=.tmp
+a1.sinks.s2.hdfs.rollInterval=2
+a1.sinks.s2.hdfs.rollSize=1024
+a1.sinks.s2.hdfs.fileType=DataStream
+a1.sinks.s2.hdfs.writeFormat=Text
+a1.sinks.s2.hdfs.round = true
+a1.sinks.s2.hdfs.roundValue = 1
+a1.sinks.s2.hdfs.roundUnit = second
+a1.sinks.s2.hdfs.useLocalTimeStamp=true
+
+a1.sources.r1.channels=c1 c2
+a1.sinks.s1.channel=c1
+a1.sinks.s2.channel=c2
+
+bin/flume-ng agent -c ./conf/ -f ./job/rep.job -n a1 -Dflume.root.logger=INFO,console
+```
+
+### 案例4、复分选择器
+
+```
+vi ./job/mul
+a1.sources=r1
+a1.channels=c1 c2
+a1.sinks=s1 s2
+
+a1.sources.r1.type=org.apache.flume.source.http.HTTPSource
+a1.sources.r1.port=6666
+a1.sources.r1.bind=mini1
+a1.sources.r1.selector.type = multiplexing
+a1.sources.r1.selector.header = status
+a1.sources.r1.selector.mapping.CZ = c1
+a1.sources.r1.selector.mapping.US = c2
+a1.sources.r1.selector.default = c1
+
+a1.channels.c1.type=memory
+a1.channels.c1.capacity=1000
+a1.channels.c1.transactionCapacity=100
+a1.channels.c1.keep-alive=3
+a1.channels.c1.byteCapacityBufferPercentage = 20
+a1.channels.c1.byteCapacity = 800000
+
+a1.channels.c2.type=memory
+a1.channels.c2.capacity=1000
+a1.channels.c2.transactionCapacity=100
+a1.channels.c2.keep-alive=3
+a1.channels.c2.byteCapacityBufferPercentage = 20
+a1.channels.c2.byteCapacity = 800000
+
+a1.sinks.s1.type = logger
+
+a1.sinks.s2.type = hdfs
+a1.sinks.s2.hdfs.path = /flume/events4/%y-%m-%d/%H%M/%S
+a1.sinks.s2.hdfs.filePrefix = event-
+a1.sinks.s2.hdfs.fileSuffix=.log
+a1.sinks.s2.hdfs.inUseSuffix=.tmp
+a1.sinks.s2.hdfs.rollInterval=2
+a1.sinks.s2.hdfs.rollSize=1024
+a1.sinks.s2.hdfs.fileType=DataStream
+a1.sinks.s2.hdfs.writeFormat=Text
+a1.sinks.s2.hdfs.round = true
+a1.sinks.s2.hdfs.roundValue = 1
+a1.sinks.s2.hdfs.roundUnit = second
+a1.sinks.s2.hdfs.useLocalTimeStamp=true
+
+a1.sources.r1.channels=c1 c2
+a1.sinks.s1.channel=c1
+a1.sinks.s2.channel=c2
+
+
+bin/flume-ng agent -c ./conf/ -f ./job/mul -n a1 -Dflume.root.logger=INFO,console
+
+
+测试数据：
+curl -X POST -d '[{"headers":{"status":"2017-06-13"},"body":"this is default"}]' http://mini1:6666
+curl -X POST -d '[{"headers":{"status":"CZ"},"body":"this is CZ"}]' http://mini1:6666
+curl -X POST -d '[{"headers":{"status":"US"},"body":"this is US"}]' http://mini1:6666
+curl -X POST -d '[{"headers":{"status":"ss"},"body":"this is ss"}]' http://mini1:6666
+```
+
+**测试c1**
+
+![1568983347593](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568983347593.png)
+
+![1568983402836](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568983402836.png)
+
+**测试C2**
+
+![1568983426962](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568983426962.png)
+
+![1568983472625](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568983472625.png)
+
+![1568983520968](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1568983520968.png)
+
+## flume集群配置
+
+```
+mini1的配置：
+a1.sources=r1
+a1.channels=c1
+a1.sinks=s1
+
+a1.sources.r1.type=syslogtcp
+a1.sources.r1.port=6666
+a1.sources.r1.host=mini1
+
+a1.channels.c1.type=memory
+a1.channels.c1.capacity=1000
+a1.channels.c1.transactionCapacity=100
+a1.channels.c1.keep-alive=3
+a1.channels.c1.byteCapacityBufferPercentage = 20
+a1.channels.c1.byteCapacity = 800000
+
+a1.sinks.s1.type =avro
+a1.sinks.s1.hostname=mini3
+a1.sinks.s1.port=6666
+
+a1.sources.r1.channels=c1
+a1.sinks.s1.channel=c1
+
+
+mini2的配置：
+a1.sources=r1
+a1.channels=c1
+a1.sinks=s1
+
+a1.sources.r1.type=syslogtcp
+a1.sources.r1.port=6666
+a1.sources.r1.host=mini2
+
+a1.channels.c1.type=memory
+a1.channels.c1.capacity=1000
+a1.channels.c1.transactionCapacity=100
+a1.channels.c1.keep-alive=3
+a1.channels.c1.byteCapacityBufferPercentage = 20
+a1.channels.c1.byteCapacity = 800000
+
+a1.sinks.s1.type =avro
+a1.sinks.s1.hostname=mini3
+a1.sinks.s1.port=6666
+
+a1.sources.r1.channels=c1
+a1.sinks.s1.channel=c1
+
+
+mini3的配置：
+a1.sources=r1
+a1.channels=c1
+a1.sinks=s1
+
+a1.sources.r1.type=avro
+a1.sources.r1.port=6666
+a1.sources.r1.bind=mini3
+
+a1.channels.c1.type=memory
+a1.channels.c1.capacity=1000
+a1.channels.c1.transactionCapacity=100
+a1.channels.c1.keep-alive=3
+a1.channels.c1.byteCapacityBufferPercentage = 20
+a1.channels.c1.byteCapacity = 800000
+
+a1.sinks.s1.type =logger
+
+a1.sources.r1.channels=c1
+a1.sinks.s1.channel=c1
+ 
+####然后测试：
+先启动master的agent:
+bin/flume-ng agent -c ./conf/ -f ./job/slave2 -n a1 -Dflume.root.logger=INFO,console &
+然后再启动slave的agent：
+bin/flume-ng agent -c ./conf/ -f ./job/slave1 -n a1 -Dflume.root.logger=INFO,console &
+bin/flume-ng agent -c ./conf/ -f ./job/master -n a1 -Dflume.root.logger=INFO,console &
+```
+
+先开启mini3，然后再分别开启mini1和mini2
+
+查看mini3控制台打印信息
+
+![1569027925211](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1569027925211.png)
+
+此时说明mini1和mini2已经成功连接上来
+
+用mini1向自己的6666端口发送消息
+
+![1569028410625](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1569028410625.png)
+
+查看mini1终端信息
+
+![1569028438044](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1569028438044.png)
+
+查看mini3终端信息
+
+![1569028456069](C:\Users\luoyunfan\AppData\Roaming\Typora\typora-user-images\1569028456069.png)
+
+
+
+同理测试mini2
